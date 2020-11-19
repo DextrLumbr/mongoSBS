@@ -1,18 +1,22 @@
 const express = require("express");
 const app = express();
+var fs = require('fs');
+const config = require('./config');
 
 const crypto = require("crypto");
 const path = require("path");
 const mongoose = require("mongoose");
 const multer = require("multer");
 const GridFsStorage = require("multer-gridfs-storage");
+const MongoClient = require('mongodb').MongoClient
 
 // Middlewares
 app.use(express.json());
 app.set("view engine", "ejs");
+app.use(express.static('assets'))
 
 // DB
-const mongoURI = "mongodb://localhost:27017/node-file-upl";
+const mongoURI = config.mongoURI;
 
 // connection
 const conn = mongoose.createConnection(mongoURI, {
@@ -32,6 +36,7 @@ conn.once("open", () => {
 // Storage
 const storage = new GridFsStorage({
   url: mongoURI,
+  options: { useNewUrlParser: true, useUnifiedTopology: true },
   file: (req, file) => {
     return new Promise((resolve, reject) => {
       crypto.randomBytes(16, (err, buf) => {
@@ -97,7 +102,20 @@ app.get("/", (req, res) => {
 
 app.post("/upload", upload.single("file"), (req, res) => {
   // res.json({file : req.file})
-  res.redirect("/");
+  console.log(req)
+  console.log(req.body);
+  console.log(req.file.id);
+  req.body.comps.bizInfo.media = req.file.id
+ const client = new MongoClient(mongoURI, { useUnifiedTopology: true });
+ client.connect((err) => {
+  const db = client.db();
+  const collection = db.collection('videoInfo');
+  collection.insertOne(req.body)
+    .then(result => {
+      res.redirect('/')
+    })
+    .catch(error => console.error(error))
+ });
 });
 
 app.get("/files", (req, res) => {
@@ -143,6 +161,16 @@ app.get("/image/:filename", (req, res) => {
         });
       }
       gfs.openDownloadStreamByName(req.params.filename).pipe(res);
+      /*gfs.openDownloadStreamByName(req.params.filename).
+      pipe(fs.createWriteStream('/Users/Timbr/maast/crud-express-mongo/src/dog_' + req.params.filename + '.jpg')).
+        on('error', function(error) {
+            console.log(":::error");
+          assert.ifError(error);
+        }).
+        on('finish', function() {
+          console.log('done!');
+          // process.exit(0);
+        });*/
     });
 });
 
@@ -154,6 +182,10 @@ app.post("/files/del/:id", (req, res) => {
     res.redirect("/");
   });
 });
+
+app.get('/create-sbs-content', (req, res) => {
+  res.sendFile(__dirname + '/views/content-studio.html')
+})
 
 const port = 5001;
 
